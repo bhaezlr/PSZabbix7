@@ -1,5 +1,5 @@
 TOPIC
-    about_PSZabbix
+    about_PSZabbix7
 
 SHORT DESCRIPTION
     This modules enables an administrator to do and automate common
@@ -20,11 +20,12 @@ LONG DESCRIPTION
     templates (moreover, these operations being rare, there is little value in
     automating them). 
 
-    This module is tested on Zabbix 2.4 and later, 3.2 and later. It should 
-    also work and other versions but without any guarantee.
+    This module is tested on Zabbix 7.0.10 and later. 
+    Without garantee it could work with versions between 7.0 and 7.0.10
+    It will not work with older versions.
 
 EXAMPLES
-    Import-Module PSZabbix # only needed if powershell version <=3
+    Import-Module PSZabbix7 # only needed if powershell version <=3
     New-ZbxApiSession "http://myserver/zabbix/api_jsonrpc.php" (Get-Credential MyAdminLogin)
     Get-ZbxHost 
 
@@ -32,4 +33,4 @@ KEYWORDS
     Zabbix
 
 SEE ALSO
-    Zabbix API reference: https://www.zabbix.com/documentation/2.4/manual/api 
+    Zabbix API reference: https://www.zabbix.com/documentation/7.0/en/manual/api
