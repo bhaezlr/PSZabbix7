@@ -53,7 +53,9 @@ function New-ApiSession
     ----                           -----
     Auth                           2cce0ad0fac0a5da348fdb70ae9b233b
     Uri                            http://myserver/zabbix/api_jsonrpc.php
-    WARNING : Connected to Zabbix version 3.2.1
+
+    WARNING : Connected to Zabbix version between 7.0 and 7.0.10
+    ERROR   : Connected to Zabbix version earlier than 7.0
     #>
     param(
         # The Zabbix REST endpoint. It should be like "http://myserver/zabbix/api_jsonrpc.php".
