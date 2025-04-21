@@ -1,4 +1,4 @@
-# What is PSZabbix
+# What is PSZabbix7
 
 A powershell module for automating Zabbix administration.
 
@@ -18,15 +18,15 @@ Zabbix UI to do complex operations like adding monitored items to hosts or
 templates (moreover, these operations being rare, there is little value in
 automating them). 
 
-This module is tested on Zabbix 2.4 and later, 3.2 and later. It should 
-also work and other versions but without any guarantee.
+This module is tested on Zabbix 7.0.10 and later. Without garantee it could work with versions between 7.0 and 7.0.10
+It will not work with older versions.
 
 # Installation
 
 The module is published on the PowerShell gallery, so download and installation is simply (powershell 5+):
 
 ```
-PS> Install-Module PSZabbix -scope CurrentUser
+PS> Install-Module PSZabbix7 -scope CurrentUser
 ```
 
 If using an older version of PowerShell, you must download the release from the releases page, unzip it 
@@ -39,7 +39,7 @@ All cmdlets have a "get-help" documentation. Here are the basics:
 
 ```
 # Import the module (if old powershell version)
-PS> Import-Module PSZabbix
+PS> Import-Module PSZabbix7
 
 # You must first create a session against a Zabbix server - only needed once per work session.
 PS> $s = New-ZbxApiSession "http://myserver/zabbix/api_jsonrpc.php" (Get-Credential MyAdminLogin)
@@ -53,42 +53,41 @@ hostid host                    name                                        statu
 ...
 
 # List of cmdlets (the Zbx prefix can be changed on import if needed):
-PS> Get-Command -Module PSZabbix
-CommandType     Name                                               Version    Source
------------     ----                                               -------    ------
-Function        Add-ZbxHostGroupMembership                         1.0.0      PSZabbix
-Function        Add-ZbxUserGroupMembership                         1.0.0      PSZabbix
-Function        Add-ZbxUserGroupPermission                         1.0.0      PSZabbix
-Function        Add-ZbxUserMail                                    1.0.0      PSZabbix
-Function        Disable-ZbxHost                                    1.0.0      PSZabbix
-Function        Disable-ZbxUserGroup                               1.0.0      PSZabbix
-Function        Enable-ZbxHost                                     1.0.0      PSZabbix
-Function        Enable-ZbxUserGroup                                1.0.0      PSZabbix
-Function        Get-ZbxAction                                      1.0.0      PSZabbix
-Function        Get-ZbxHost                                        1.0.0      PSZabbix
-Function        Get-ZbxHostGroup                                   1.0.0      PSZabbix
-Function        Get-ZbxMedia                                       1.0.0      PSZabbix
-Function        Get-ZbxMediaType                                   1.0.0      PSZabbix
-Function        Get-ZbxProxy                                       1.0.0      PSZabbix
-Function        Get-ZbxTemplate                                    1.0.0      PSZabbix
-Function        Get-ZbxUser                                        1.0.0      PSZabbix
-Function        Get-ZbxUserGroup                                   1.0.0      PSZabbix
-Function        New-ZbxApiSession                                  1.0.0      PSZabbix
-Function        New-ZbxHost                                        1.0.0      PSZabbix
-Function        New-ZbxHostGroup                                   1.0.0      PSZabbix
-Function        New-ZbxUser                                        1.0.0      PSZabbix
-Function        New-ZbxUserGroup                                   1.0.0      PSZabbix
-Function        Remove-ZbxHost                                     1.0.0      PSZabbix
-Function        Remove-ZbxHostGroup                                1.0.0      PSZabbix
-Function        Remove-ZbxHostGroupMembership                      1.0.0      PSZabbix
-Function        Remove-ZbxMedia                                    1.0.0      PSZabbix
-Function        Remove-ZbxTemplate                                 1.0.0      PSZabbix
-Function        Remove-ZbxUser                                     1.0.0      PSZabbix
-Function        Remove-ZbxUserGroup                                1.0.0      PSZabbix
-Function        Remove-ZbxUserGroupMembership                      1.0.0      PSZabbix
+PS> Get-Command -Module PSZabbix7
+CommandType     Name                                               Version    Source                                                                                                                                                                             
+-----------     ----                                               -------    ------                                                                                                                                                                             
+Function        Add-ZbxHostGroupMembership                         1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Add-ZbxHostMacro                                   1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Add-ZbxHostTemplate                                1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Add-ZbxUserGroupMembership                         1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Add-ZbxUserGroupPermission                         1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Add-ZbxUserMail                                    1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Close-ZbxApiSession                                1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Disable-ZbxHost                                    1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Disable-ZbxUserGroup                               1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Enable-ZbxHost                                     1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Enable-ZbxUserGroup                                1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Get-ZbxAction                                      1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Get-ZbxHost                                        1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Get-ZbxHostGroup                                   1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Get-ZbxMedia                                       1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Get-ZbxMediaType                                   1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Get-ZbxProxy                                       1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Get-ZbxTemplate                                    1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Get-ZbxUser                                        1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Get-ZbxUserGroup                                   1.0.0      PSZabbix7                                                                                                                                                                          
+Function        New-ZbxApiSession                                  1.0.0      PSZabbix7                                                                                                                                                                          
+Function        New-ZbxHost                                        1.0.0      PSZabbix7                                                                                                                                                                          
+Function        New-ZbxHostGroup                                   1.0.0      PSZabbix7                                                                                                                                                                          
+Function        New-ZbxUser                                        1.0.0      PSZabbix7                                                                                                                                                                          
+Function        New-ZbxUserGroup                                   1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Remove-ZbxHost                                     1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Remove-ZbxHostGroup                                1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Remove-ZbxHostGroupMembership                      1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Remove-ZbxMedia                                    1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Remove-ZbxTemplate                                 1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Remove-ZbxUser                                     1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Remove-ZbxUserGroup                                1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Remove-ZbxUserGroupMembership                      1.0.0      PSZabbix7                                                                                                                                                                          
+Function        Update-ZbxHost                                     1.0.0      PSZabbix7                                                                                                                                                                          
 ```
-
-# Misc
-
-The module is tested with Pester. If you want to run the tests you will have to modify the login chain inside the test file
-and have a working Zabbix server to test against.

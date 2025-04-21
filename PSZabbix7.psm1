@@ -15,19 +15,18 @@ function New-JsonrpcRequest($method, $params, $auth = $null)
     }
 
     return ConvertTo-Json @{
-        jsonrpc = "2.0"
-	    method = $method
-	    params = $params
-	    id = 1
-	    auth = $auth
-    } -Depth 20
-}
+                                jsonrpc = "2.0"
+	                            method = $method
+	                            params = $params
+	                            id = 1
+                            } -Depth 20
 
+}
 
 function Get-ApiVersion($Session)
 {
     $r = Invoke-RestMethod -Uri $session.Uri -Method Post -ContentType "application/json" -Body (new-JsonrpcRequest "apiinfo.version" @{})
-    $r.result
+    return $r.result
 }
 
 function New-ApiSession
@@ -66,19 +65,26 @@ function New-ApiSession
         # If this switch is used, the information message "connected to..." will not be displayed.
         [switch]$Silent
     )
-    $r = Invoke-RestMethod -Uri $ApiUri -Method Post -ContentType "application/json" -Body (new-JsonrpcRequest "user.login" @{user = $auth.UserName; password = $auth.GetNetworkCredential().Password})
+    $r = Invoke-RestMethod -Uri $ApiUri -Method Post -ContentType "application/json" -Body (new-JsonrpcRequest "user.login" @{username = $auth.UserName; password = $auth.GetNetworkCredential().Password})
     if ($r -eq $null -or $r.result -eq $null -or [string]::IsNullOrWhiteSpace($r.result))
     {
         Write-Error -Message "Session could not be opened"
     }
     $script:latestSession = @{Uri = $ApiUri; Auth = $r.result}
-    $script:latestSession
+    ##$script:latestSession
 
     $ver = Get-ApiVersion -Session $script:latestSession
     $vers = $ver.split(".")
-    if ( ($vers[0] -lt 2) -or ($vers[0] -eq 2 -and $vers[1] -lt 4))
+    if ([int]$vers[0] -lt 7)
     {
-        Write-Warning "PSZabbix has not been tested with this version of Zabbix ${ver}. Tested version are >= 2.4. It should still work but be warned."
+        Write-Host "PSZabbix7 will not work with this version of Zabbix ${ver}."
+        Exit
+       
+    }
+    else {
+        if (([int]$vers[0] -eq 7) -and ([int]$vers[1] -eq 0) -and ([int]$vers[2] -lt 10)) {
+            Write-Warning -Message "PSZabbix7 has not been tested with this version of Zabbix ${ver}. Tested version are >= 7.0.10 It should still work but be warned."
+        }
     }
     if (-not $Silent)
     {
@@ -86,6 +92,16 @@ function New-ApiSession
     }
 }
 
+function Close-ApiSession ($session)
+{
+     if ($session -eq $null) { $session = $latestSession }
+
+    $r = Invoke-RestMethod -Uri $session.Uri -Method Post -ContentType "application/json" -Body (new-JsonrpcRequest "user.logout" @()) -Headers @{"Authorization" = "Bearer $($session.Auth)"}
+    if ($r -eq $null -or $r.result -eq $null -or [string]::IsNullOrWhiteSpace($r.result))
+    {
+        Write-Error -Message "Session could not be closed"
+    }
+}
 
 function Invoke-ZabbixApi($session, $method, $parameters = @{})
 {
@@ -96,7 +112,7 @@ function Invoke-ZabbixApi($session, $method, $parameters = @{})
         return
     }
 
-    $r = Invoke-RestMethod -Uri $session.Uri -Method Post -ContentType "application/json" -Body (new-JsonrpcRequest $method $parameters $session.Auth)
+    $r = Invoke-RestMethod -Uri $session.Uri -Method Post -ContentType "application/json" -Body (new-JsonrpcRequest $method $parameters ) -Headers @{"Authorization" = "Bearer $($session.Auth)"}
     if ($r.error -ne $null)
     {
         Write-Error -Message "$($r.error.message) $($r.error.data)" -ErrorId $r.error.code
@@ -106,7 +122,6 @@ function Invoke-ZabbixApi($session, $method, $parameters = @{})
         return $r.result
     }
 }
-
 
 
 ################################################################################
@@ -120,6 +135,10 @@ Add-Type -TypeDefinition @"
       Disabled = 1    
    }
 "@
+
+$SNMPv3SecurityLevels = @("NoAuthNoPriv", "AuthNoPriv", "AuthPriv")
+$SNMPv3AuthenticationProtocols = @("MD5", "SHA1", "SHA224", "SHA256", "SHA384", "SHA512")
+$SNMPv3PrivacyProtocols = @("DES", "AES128", "AES192", "AES256", "AES192C", "AES256C")
 
 
 function Get-Host
@@ -173,12 +192,13 @@ function Get-Host
 
         [Parameter(Mandatory=$False, Position=0)][Alias("HostName")]
         # Filter by hostname. Accepts wildcard.
-        [string] $Name
+        [string] $Name  = ""
     )
-    $prms = @{search= @{}; searchWildcardsEnabled = 1; selectInterfaces = @("interfaceid", "ip", "dns"); selectParentTemplates = 1}
+    $prms = @{search= @{}; searchWildcardsEnabled = 1; selectInterfaces = @("interfaceid", "ip", "dns"); selectParentTemplates = "extend"} 
     if ($Id.Length -gt 0) {$prms["hostids"] = $Id}
     if ($HostGroupId.Length -gt 0) {$prms["groupids"] = $GroupId}
-    if ($Name -ne $null) {$prms["search"]["name"] = $Name}
+    if ($Name -ne "") {$prms["search"] = @{name = $Name}}
+
     Invoke-ZabbixApi $session "host.get" $prms |% {$_.status = [ZbxStatus]$_.status; $_.hostid = [int]$_.hostid; $_.PSTypeNames.Insert(0,"ZabbixHost"); $_}
 }
 
@@ -260,7 +280,10 @@ function New-Host
 
         [parameter(Mandatory=$false)]
         # The ID of the proxy to use. Default is no proxy.
-        [int] $ProxyId
+        [int] $ProxyId,
+
+        [parameter(Mandatory=$false)]
+        $SnmpSettings = $null 
     )
 
     $isIp = 0
@@ -282,19 +305,26 @@ function New-Host
         name = if ([string]::IsNullOrWhiteSpace($VisibleName)) { $null } else { $VisibleName }
         description = $Description
         interfaces = @( @{
-            type = 1
-            main = 1
-            useip = $isIp
-            dns = if ($isIp -eq 1) { "" } else { $Dns }
-            ip = if ($isIp -eq 0) { "" } else { $Dns }
-            port = $Port
-        })
+                          type = if ($SnmpSettings -eq $null) {1} else {2}
+                          main = 1
+                          useip = $isIp
+                          dns = if ($isIp -eq 1) { "" } else { $Dns }
+                          ip = if ($isIp -eq 0) { "" } else { $Dns }
+                          port = $Port
+                         }
+                      )
         groups = $HostGroup
         templates = $Template
         inventory_mode = 0
         inventory = $Inventory
         status = [int]$Status
         proxy_hostid = if ($ProxyId -eq $null) { "" } else { $ProxyId }
+    }
+    if ($snmpsettings -ne $null) {
+        $snmpsettings.securitylevel = $SNMPv3Securitylevels.IndexOf($snmpsettings.securitylevel)
+        $snmpsettings.authprotocol = $SNMPv3AuthenticationProtocols.indexOf($snmpsettings.authprotocol)
+        $snmpsettings.privprotocol = $SNMPv3PrivacyProtocols.indexOf($snmpsettings.privprotocol)
+        $prms["interfaces"][0]["details"] = $snmpsettings
     }
 
     $r = Invoke-ZabbixApi $session "host.create" $prms
@@ -482,12 +512,12 @@ function Add-HostGroupMembership
     )
     begin
     {
-        $grpids = @($HostGroup |% {@{groupid = $_.groupid}} )
+        $grpids = @($HostGroup |% {@{groupid = $_}} )
         $prms = @{hosts = @(); groups = $grpids}
     }
     process
     {
-        $prms["hosts"] += $Host.hostid
+        $prms.hosts += @{hostid=$Host.hostid}
     }
     end
     {
@@ -775,10 +805,13 @@ function Get-HostGroup
         # Filter by name. Accepts wildcard.
         [string] $Name
     )
-    $prms = @{search= @{}; searchWildcardsEnabled = 1; selectHosts = 1}
+
+    $prms = @{search= @{}; searchWildcardsEnabled=$true; selectHosts="extend"}
+
     if ($HostId.Length -gt 0) {$prms["hostids"] = $HostId}
     if ($Id.Length -gt 0) {$prms["groupids"] = $Id}
     if ($Name -ne $null) {$prms["search"]["name"] = $Name}
+
     Invoke-ZabbixApi $session "hostgroup.get"  $prms |% {$_.groupid = [int]$_.groupid; $_.PSTypeNames.Insert(0,"ZabbixGroup"); $_}
 }
 
@@ -1900,11 +1933,11 @@ function Get-Proxy
 
         [Parameter(Mandatory=$False, Position=0)][Alias("ProxyName")]
         # Filter by name. Accepts wildcard.
-        [string]$Name
+        [string]$Name = ""
     )
-    $prms = @{searchWildcardsEnabled=1; filter= @{selectInterface=1}; search=@{}}
+    $prms = @{search=@{}; searchWildcardsEnabled=$true} 
     if ($Id.Length -gt 0) {$prms["proxyids"] = $Id}
-    if ($Name -ne $null) {$prms["search"]["name"] = $Name}
+    if ($Name -ne "") {$prms["search"]["name"] = $Name}
     Invoke-ZabbixApi $session "proxy.get"  $prms |% {$_.proxyid = [int]$_.proxyid; $_.PSTypeNames.Insert(0,"ZabbixProxy"); $_}
 }
 
@@ -2148,4 +2181,101 @@ function Remove-Media
         if ($prms.Count -eq 0) { return }
         Invoke-ZabbixApi $session "user.deletemedia"  $prms | select -ExpandProperty mediaids
     }    
+}
+
+
+###==========================================================================================
+###==========================================================================================
+###==========================================================================================
+function Add-HostMacro
+{
+    <#
+    .SYNOPSIS
+    
+    .DESCRIPTION
+
+    .INPUTS
+    This function accepts ZabbixHost objects from the pipe. Equivalent to using -Host parameter.
+
+    .OUTPUTS
+
+    .EXAMPLE
+    #>
+    param
+    (
+        [Parameter(Mandatory=$False)]
+        # A valid Zabbix API session retrieved with New-ZbxApiSession. If not given, the latest opened session will be used, which should be enough in most cases.
+        [Hashtable] $Session,
+
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true, Position=1)][ValidateScript({ $_.PSObject.TypeNames[0] -eq 'ZabbixHost'})][ValidateNotNullOrEmpty()]
+        # The host or hostid to add to the hostgroup.
+        [PSCustomObject[]]$Host,
+
+        [Parameter(Mandatory=$true, Position=2)][ValidateNotNullOrEmpty()]
+        # The Host is added to this list of one or more hostgroups.
+        [PSCustomObject[]]$MacroNames,
+        [Parameter(Mandatory=$true, Position=3)][ValidateNotNullOrEmpty()]
+        # The Host is added to this list of one or more hostgroups.
+        [PSCustomObject[]]$MacroValues
+    )
+    begin
+    {
+        $macros = @()
+        for ($i = 0; $i -lt $MacroNames.length; $i++) {
+            $macros += @{macro=$MacroNames[$i]; value=$MacroValues[$i] }
+        }
+        $prms = @{hosts = @(); macros = $macros}
+    }
+    process
+    {
+        $prms.hosts += @{hostid=$Host.hostid}
+    }
+    end
+    {
+        Invoke-ZabbixApi $session "host.massadd" $prms | select -ExpandProperty hostids
+    }   
+}
+
+function Add-HostTemplate
+{
+    <#
+    .SYNOPSIS
+    
+    .DESCRIPTION
+
+    .INPUTS
+    This function accepts ZabbixHost objects from the pipe. Equivalent to using -Host parameter.
+
+    .OUTPUTS
+
+    .EXAMPLE
+    #>
+    param
+    (
+        [Parameter(Mandatory=$False)]
+        # A valid Zabbix API session retrieved with New-ZbxApiSession. If not given, the latest opened session will be used, which should be enough in most cases.
+        [Hashtable] $Session,
+
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true, Position=1)][ValidateScript({ $_.PSObject.TypeNames[0] -eq 'ZabbixHost'})][ValidateNotNullOrEmpty()]
+        [PSCustomObject[]]$Host,
+
+        [Parameter(Mandatory=$true, Position=2)][ValidateNotNullOrEmpty()]
+        [PSCustomObject[]]$Templates
+    )
+    begin
+    {
+        $newtemplates = @()
+        for ($i = 0; $i -lt $Templates.length; $i++) {
+            $newtemplates += @{templateid=$Templates[$i]}
+        }
+        $prms = @{hosts = @(); templates = $newtemplates}
+    }
+    process
+    {
+        $prms.hosts += @{hostid=$Host.hostid}
+    }
+    end
+    {
+        Invoke-ZabbixApi $session "host.massadd" $prms | select -ExpandProperty hostids
+    }   
 }
