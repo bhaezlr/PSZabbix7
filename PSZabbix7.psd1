@@ -12,7 +12,7 @@
 RootModule = 'PSZabbix7.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.0.2'
+ModuleVersion = '1.1.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -103,7 +103,8 @@ FunctionsToExport = @(
     'Get-MediaType', 
     'Add-HostMacro', 
     'Add-HostTemplate', 
-    'Close-ApiSession')
+    'Close-ApiSession',
+    'Update-Interface')
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
@@ -142,6 +143,14 @@ PrivateData = @{
 
         # ReleaseNotes of this module
         ReleaseNotes = '
+1.1.0:
+    * (Update) New-ZbxHost : Extra parameter type interface
+    * (New) Update-ZbxInterface : Modify Interface parameters
+    * Publish to PSGallery from github
+    * (Update) Get-ZbxProxy
+1.0.2:
+    * Correction of typos
+1.0.1: 
 1.0.0: 
     * Initial fork
     * Necessary adaptation to work with Zabbix greater 7.0

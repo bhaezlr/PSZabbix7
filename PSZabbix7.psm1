@@ -1,6 +1,13 @@
 ﻿$ErrorActionPreference = "Stop"
 $latestSession = $null
 
+$InterfaceTypes = @("", "Agent", "SNMP", "IPMI", "JMX")
+
+$SNMPv3SecurityLevels = @("NoAuthNoPriv", "AuthNoPriv", "AuthPriv")
+$SNMPv3AuthenticationProtocols = @("MD5", "SHA1", "SHA224", "SHA256", "SHA384", "SHA512")
+$SNMPv3PrivacyProtocols = @("DES", "AES128", "AES192", "AES256", "AES192C", "AES256C")
+
+
 
 
 ################################################################################
@@ -125,6 +132,29 @@ function Invoke-ZabbixApi($session, $method, $parameters = @{})
     }
 }
 
+function CreateSNMPSettings ($SnmpSettings = @{})
+{
+    $SNMP = @{}
+    $SNMP["version"] = $SnmpSettings.version
+    if ($snmpsettings.securitylevel -lt 3) {
+        $SNMP["community"] = $SnmpSettings.Community
+    }
+    else {
+        $SNMP["contextname"] = $SnmpSettings.contextname
+        $SNMP["securityname"] = $SnmpSettings.securityname
+        $SNMP["securitylevel"] = $SNMPv3Securitylevels.IndexOf($snmpsettings.securitylevel)
+
+        if (($snmpsettings.securitylevel -eq "AuthNoPriv") -or ($snmpsettings.securitylevel -eq "AuthPriv")) {
+            $SNMP["authprotocol"] = $SNMPv3AuthenticationProtocols.IndexOf($snmpsettings.authprotocol)
+            $SNMP["authpassphrase"] = $SnmpSettings.authpassphrase
+        }
+        if ($snmpsettings.securitylevel -eq "AuthPriv") {
+            $SNMP["privprotocol"] = $SNMPv3PrivacyProtocols.IndexOf($snmpsettings.privprotocol)
+            $SNMP["privpassphrase"] = $SnmpSettings.privpassphrase
+        }
+    }
+    return $SNMP
+}
 
 ################################################################################
 ## HOSTS
@@ -137,10 +167,6 @@ Add-Type -TypeDefinition @"
       Disabled = 1    
    }
 "@
-
-$SNMPv3SecurityLevels = @("NoAuthNoPriv", "AuthNoPriv", "AuthPriv")
-$SNMPv3AuthenticationProtocols = @("MD5", "SHA1", "SHA224", "SHA256", "SHA384", "SHA512")
-$SNMPv3PrivacyProtocols = @("DES", "AES128", "AES192", "AES256", "AES192C", "AES256C")
 
 
 function Get-Host
@@ -282,7 +308,10 @@ function New-Host
 
         [parameter(Mandatory=$false)]
         # The ID of the proxy to use. Default is no proxy.
-        [int] $ProxyId,
+        [int] $ProxyId = -1,
+
+        [parameter(Mandatory=$false)]
+        [string] $InterfaceType = "Agent",
 
         [parameter(Mandatory=$false)]
         $SnmpSettings = $null 
@@ -307,7 +336,7 @@ function New-Host
         name = if ([string]::IsNullOrWhiteSpace($VisibleName)) { $null } else { $VisibleName }
         description = $Description
         interfaces = @( @{
-                          type = if ($SnmpSettings -eq $null) {1} else {2}
+                          type = $InterfaceTypes.IndexOf($InterfaceType)
                           main = 1
                           useip = $isIp
                           dns = if ($isIp -eq 1) { "" } else { $Dns }
@@ -320,13 +349,17 @@ function New-Host
         inventory_mode = 0
         inventory = $Inventory
         status = [int]$Status
-        proxy_hostid = if ($ProxyId -eq $null) { "" } else { $ProxyId }
+        ##proxy_hostid = if ($ProxyId -eq $null) { "" } else { $ProxyId }
+    }
+
+    if ($ProxyId -ne -1) {
+        $prms["monitored_by"] = 1
+        $prms["proxyid"] =$ProxyID
     }
     if ($snmpsettings -ne $null) {
-        $snmpsettings.securitylevel = $SNMPv3Securitylevels.IndexOf($snmpsettings.securitylevel)
-        $snmpsettings.authprotocol = $SNMPv3AuthenticationProtocols.indexOf($snmpsettings.authprotocol)
-        $snmpsettings.privprotocol = $SNMPv3PrivacyProtocols.indexOf($snmpsettings.privprotocol)
-        $prms["interfaces"][0]["details"] = $snmpsettings
+ 
+        $prms["interfaces"][0]["type"] = $InterfaceTypes.IndexOf("SNMP")
+        $prms["interfaces"][0]["details"] = CreateSNMPSettings ($SnmpSettings)
     }
 
     $r = Invoke-ZabbixApi $session "host.create" $prms
@@ -2280,4 +2313,54 @@ function Add-HostTemplate
     {
         Invoke-ZabbixApi $session "host.massadd" $prms | select -ExpandProperty hostids
     }   
+}
+
+function Update-Interface 
+{
+    param
+    (
+        [Parameter(Mandatory=$False)]
+        # A valid Zabbix API session retrieved with New-ZbxApiSession. If not given, the latest opened session will be used, which should be enough in most cases.
+        [Hashtable] $Session,
+
+        [Parameter(Mandatory=$True)][Alias("InterfaceId")]
+        # Only retrieve the items with the given ID(s).
+        [int] $Id,
+        
+        [parameter(Mandatory=$false)]
+        # The DNS or IP address to use to contact the host
+        [string] $Dns = "",
+
+        [parameter(Mandatory=$false)]
+        # The port to use to use to contact the host. Default is 10050.
+        [int] $Port = 10050,
+
+        [parameter(Mandatory=$false)]
+        [string] $InterfaceType = "Agent",
+
+        [parameter(Mandatory=$false)]
+        $SnmpSettings = $null 
+    )
+
+    $prms = @{
+        interfaceid = $Id
+    }
+
+    if ($dns -ne "") {
+        $isIp = 0
+        try { [ipaddress]$Dns; $isIp = 1} catch {}
+        $prms += @{useip = $isIp
+                   dns = if ($isIp -eq 1) { "" } else { $Dns }
+                   ip = if ($isIp -eq 0) { "" } else { $Dns }
+                   port = $port
+                   type = $InterfaceTypes.IndexOf($InterfaceType)
+                  }
+    }
+
+    if ($snmpsettings -ne $null) {
+        $prms["type"] = 2
+        $prms["details"] = CreateSNMPSettings($snmpsettings)
+    }
+
+    $r = Invoke-ZabbixApi $session "hostinterface.update" $prms
 }
