@@ -136,7 +136,7 @@ function CreateSNMPSettings ($SnmpSettings = @{})
 {
     $SNMP = @{}
     $SNMP["version"] = $SnmpSettings.version
-    if ($snmpsettings.securitylevel -lt 3) {
+    if ($snmpsettings.version -lt 3) {
         $SNMP["community"] = $SnmpSettings.Community
     }
     else {
@@ -292,6 +292,10 @@ function New-Host
 
         [parameter(Mandatory=$false)]
         # An optional map of inventory properties
+        $Inventory_mode = -1,
+
+        [parameter(Mandatory=$false)]
+        # An optional map of inventory properties
         $Inventory = @{},
 
         [parameter(Mandatory=$true)]
@@ -346,7 +350,7 @@ function New-Host
                       )
         groups = $HostGroup
         templates = $Template
-        inventory_mode = 0
+        inventory_mode = $Inventory_mode
         inventory = $Inventory
         status = [int]$Status
         ##proxy_hostid = if ($ProxyId -eq $null) { "" } else { $ProxyId }
@@ -2364,3 +2368,56 @@ function Update-Interface
 
     $r = Invoke-ZabbixApi $session "hostinterface.update" $prms
 }
+
+function Get-Interface
+{
+    param
+    (
+        [Parameter(Mandatory=$False)]
+        # A valid Zabbix API session retrieved with New-ZbxApiSession. If not given, the latest opened session will be used, which should be enough in most cases.
+        [Hashtable] $Session,
+
+        [Parameter(Mandatory=$True)][Alias("InterfaceId")]
+        # Only retrieve the items with the given ID(s).
+        [int] $Id        
+    )
+
+    $prms = @{
+        output = "Extend"
+        interfaceids = @($Id)
+    }
+
+    $r = Invoke-ZabbixApi $session "hostinterface.get" $prms
+}
+
+function Update-HostInventory
+{
+    param
+    (
+        [Parameter(Mandatory=$true)]
+        # One or more hosts to update.
+        $HostId,
+
+        [Parameter(Mandatory=$False)]
+        # A valid Zabbix API session retrieved with New-ZbxApiSession. If not given, the latest opened session will be used, which should be enough in most cases.
+        [Hashtable] $Session,
+
+        [parameter(Mandatory=$true)]
+        # Inventory mode
+        $Inventory_mode = -1,
+
+        [parameter(Mandatory=$true)]
+        # An optional map of inventory properties
+        $Inventory = @{}
+    )
+
+    $prms = @{
+        "hostid" = $HostId
+        "inventory_mode" = $Inventory_mode
+        "inventory" = $Inventory
+
+    }
+
+    $r = Invoke-ZabbixApi $session "host.update" $prms
+}
+
