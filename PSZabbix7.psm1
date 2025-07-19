@@ -70,16 +70,24 @@ function New-ApiSession
         
         # The credentials used to authenticate. Use Get-Credential to create this object.
         [PSCredential]$auth, 
+
+        # Login with APIkey
+        [string]$APIKey,
         
         # If this switch is used, the information message "connected to..." will not be displayed.
         [switch]$Silent
     )
-    $r = Invoke-RestMethod -Uri $ApiUri -Method Post -ContentType "application/json" -Body (new-JsonrpcRequest "user.login" @{username = $auth.UserName; password = $auth.GetNetworkCredential().Password})
-    if ($r -eq $null -or $r.result -eq $null -or [string]::IsNullOrWhiteSpace($r.result))
-    {
-        Write-Error -Message "Session could not be opened"
+    if ($auth -ne $null) {
+        $r = Invoke-RestMethod -Uri $ApiUri -Method Post -ContentType "application/json" -Body (new-JsonrpcRequest "user.login" @{username = $auth.UserName; password = $auth.GetNetworkCredential().Password})
+        if ($r -eq $null -or $r.result -eq $null -or [string]::IsNullOrWhiteSpace($r.result))
+        {
+            Write-Error -Message "Session could not be opened"
+        }
+        $script:latestSession = @{Uri = $ApiUri; Auth = $r.result}
     }
-    $script:latestSession = @{Uri = $ApiUri; Auth = $r.result}
+    if ($APIKey -ne $null) {
+        $script:latestSession = @{Uri = $ApiUri; Auth = $APIKey}
+    }
     ##$script:latestSession
 
     $ver = Get-ApiVersion -Session $script:latestSession
@@ -224,12 +232,43 @@ function Get-Host
     )
     $prms = @{search= @{}; searchWildcardsEnabled = 1; selectInterfaces = @("interfaceid", "ip", "dns"); selectParentTemplates = "extend"} 
     if ($Id.Length -gt 0) {$prms["hostids"] = $Id}
-    if ($HostGroupId.Length -gt 0) {$prms["groupids"] = $GroupId}
+    if ($HostGroupId.Length -gt 0) {$prms["groupids"] = $HostGroupId}
     if ($Name -ne "") {$prms["search"] = @{name = $Name}}
 
     Invoke-ZabbixApi $session "host.get" $prms |% {$_.status = [ZbxStatus]$_.status; $_.hostid = [int]$_.hostid; $_.PSTypeNames.Insert(0,"ZabbixHost"); $_}
 }
 
+function Get-HostItems
+{
+    param
+    (
+        [Parameter(Mandatory=$False)]
+        # A valid Zabbix API session retrieved with New-ZbxApiSession. If not given, the latest opened session will be used, which should be enough in most cases.
+        [Hashtable] $Session,
+
+        [Parameter(Mandatory=$False)][Alias("HostId")]
+        # Only retrieve the items of the host(s) with the given ID(s).
+        [int[]] $Id,
+        
+
+        [Parameter(Mandatory=$False, Position=0)][Alias("HostName")]
+        # Filter by hostname. Accepts wildcard.
+        [string] $Name  = "",
+
+        [Parameter(Mandatory=$true)]
+        [string] $Key = ""
+    )
+
+    $prms = @{
+                output = "extend";
+                search = @{key_ = $Key};
+                searchWildcardsEnabled = 1;
+
+            }
+    if ($Id.Length -gt 0) {$prms["hostids"] = $Id}
+    if ($Name -ne "") {$prms["host"] = $Name}
+    Invoke-ZabbixApi $session "item.get" $prms |% {$_.status = [ZbxStatus]$_.status; $_.hostid = [int]$_.hostid;  $_} 
+}
 
 function New-Host
 {
@@ -854,6 +893,27 @@ function Get-HostGroup
     Invoke-ZabbixApi $session "hostgroup.get"  $prms |% {$_.groupid = [int]$_.groupid; $_.PSTypeNames.Insert(0,"ZabbixGroup"); $_}
 }
 
+function Get-HostGroupHosts
+{
+    param
+    (
+        [Parameter(Mandatory=$False)]
+        # A valid Zabbix API session retrieved with New-ZbxApiSession. If not given, the latest opened session will be used, which should be enough in most cases.
+        [Hashtable] $Session,
+        
+        [Parameter(Mandatory=$True)]
+        # Only retrieve the groups which contain the given host(s)
+        [int] $HostgroupId
+
+    )
+
+    $prms = @{search= @{}; searchWildcardsEnabled=$true; selectHosts="extend"}
+
+    $prms["groupids"] = $HostgroupId
+
+    Invoke-ZabbixApi $session "hostgroup.get"  $prms |% {$_.groupid = [int]$_.groupid; $_}   # $_.PSTypeNames.Insert(0,"ZabbixGroup");
+}
+
 
 function New-HostGroup
 {
@@ -1035,6 +1095,41 @@ function Get-UserGroup
     Invoke-ZabbixApi $session "usergroup.get"  $prms |% {$_.usrgrpid = [int]$_.usrgrpid; $_.users_status = [ZbxStatus]$_.users_status; $_.debug_mode = [ZbxStatus]$_.debug_mode; $_.PSTypeNames.Insert(0,"ZabbixUserGroup"); $_}
 }
 
+function Get-UserGroupUsers
+{
+    param
+    (
+        [Parameter(Mandatory=$False)]
+        # A valid Zabbix API session retrieved with New-ZbxApiSession. If not given, the latest opened session will be used, which should be enough in most cases.
+        [Hashtable] $Session,
+
+        [Parameter(Mandatory=$True)]
+        # Only retrieve the usergroup with the given ID
+        [int] $UserGroupId        
+    )
+    $prms = @{searchWildcardsEnabled=1; selectUsers= 1; selectRights = 1; search= @{}}
+    $prms["usrgrpids"] = $UserGroupId
+    Invoke-ZabbixApi $session "usergroup.get"  $prms |% {$_.usrgrpid = [int]$_.usrgrpid; $_.users_status = [ZbxStatus]$_.users_status; $_.debug_mode = [ZbxStatus]$_.debug_mode;  $_} # $_.PSTypeNames.Insert(0,"ZabbixUserGroup");
+
+}
+
+function Get-UserGroupHostgroups
+{
+    param
+    (
+        [Parameter(Mandatory=$False)]
+        # A valid Zabbix API session retrieved with New-ZbxApiSession. If not given, the latest opened session will be used, which should be enough in most cases.
+        [Hashtable] $Session,
+
+        [Parameter(Mandatory=$True)]
+        # Only retrieve the usergroup with the given ID
+        [int] $UserGroupId        
+    )
+    $prms = @{searchWildcardsEnabled=1; selectHostGroupRights= 1; selectRights = 1; search= @{}}
+    $prms["usrgrpids"] = $UserGroupId
+    Invoke-ZabbixApi $session "usergroup.get"  $prms |% {$_.usrgrpid = [int]$_.usrgrpid; $_.users_status = [ZbxStatus]$_.users_status; $_.debug_mode = [ZbxStatus]$_.debug_mode;  $_} # $_.PSTypeNames.Insert(0,"ZabbixUserGroup");
+
+}
 
 function New-UserGroup
 {
@@ -1394,13 +1489,17 @@ function Get-User
 
         [Parameter(Mandatory=$False, Position=0)][Alias("UserName")]
         # Filter by name. Accepts wildcard.
-        [string] $Name
+        [string] $Name,
+        [Parameter(Mandatory=$False)]
+        # Extend medias
+        [boolean]$Medias = $false
     )
     $prms = @{selectUsrgrps = "extend"; getAccess = 1; search= @{}; searchWildcardsEnabled = 1}
+    if ($Medias) {$prms["selectMedias"] = "extend"}
     if ($Id.Length -gt 0) {$prms["userids"] = $Id}
     if ($UserGroupId.Length -gt 0) {$prms["usrgrpids"] = $UserGroupId}
     if ($Name -ne $null) {$prms["search"]["alias"] = $Name}
-    Invoke-ZabbixApi $session "user.get"  $prms |% {$_.userid = [int]$_.userid; $_.PSTypeNames.Insert(0,"ZabbixUser"); $_}
+    Invoke-ZabbixApi $session "user.get"  $prms |% {$_.userid = [int]$_.userid; $_.username = [string]$_.username;  $_}  # $_.PSTypeNames.Insert(0,"ZabbixUser");
 }
 
 
