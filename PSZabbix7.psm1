@@ -85,7 +85,7 @@ function New-ApiSession
         }
         $script:latestSession = @{Uri = $ApiUri; Auth = $r.result}
     }
-    if ($APIKey -ne $null) {
+    if ($APIKey -ne "") {
         $script:latestSession = @{Uri = $ApiUri; Auth = $APIKey}
     }
     ##$script:latestSession
